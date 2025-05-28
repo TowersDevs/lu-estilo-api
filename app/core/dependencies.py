@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status
 from app.core.auth_scheme import OAuth2PasswordBearerWithCookie
-from jose import JWTError
+from jwt import PyJWTError as JWTError
 from sqlalchemy.orm import Session
 from app.db.connection import SessionLocal
 from app.models.user import User
@@ -22,18 +22,33 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
+    print("TOKEN:", token)
+
     if not token:
+        print("❌ TOKEN ausente")
         raise credentials_exception
 
     try:
-        payload = decode_token(token)
+        pure_token = token.replace("Bearer ", "").strip()
+        payload = decode_token(pure_token)
+        print("✅ DECODE:", payload)
+        if not token.startswith("Bearer "):
+            print("❌ Token fora do formato esperado")
+            raise credentials_exception
         email: str = payload.get("sub")
         if email is None:
+            print("❌ EMAIL ausente no payload")
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        print("❌ JWTError:", e)
         raise credentials_exception
 
     user = db.query(User).filter(User.email == email).first()
+    print("🔎 USER:", user)
+
     if user is None:
+        print("❌ Usuário não encontrado")
         raise credentials_exception
+
+    print("✅ Usuário autenticado:", user.email)
     return user
